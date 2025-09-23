@@ -41,6 +41,7 @@ export const signin = async (req, res, next) => {
     const { password: hashedPassword, ...rest } = validUser._doc;
     const expiryDate = new Date(Date.now() + 86400000); // 1 hour
 
+    res.clearCookie("access_token");
     res
       .cookie("access_token", token, {
         //httpOnly: true, expires: expiryDate
@@ -94,6 +95,7 @@ export const google = async (req, res, next) => {
       const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET);
       const { password: hashedPassword2, ...rest } = newUser._doc;
       const expiryDate = new Date(Date.now() + 86400000); // 1 hour
+      res.clearCookie("access_token");
       res
         .cookie("access_token", token, {
           httpOnly: true,
@@ -110,6 +112,16 @@ export const google = async (req, res, next) => {
   }
 };
 
+// export const signout = (req, res) => {
+//   res.clearCookie("access_token").status(200).json("Signout success!");
+// };
 export const signout = (req, res) => {
-  res.clearCookie("access_token").status(200).json("Signout success!");
+  res
+    .clearCookie("access_token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+    })
+    .status(200)
+    .json("Signout success!");
 };
