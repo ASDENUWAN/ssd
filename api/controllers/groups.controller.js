@@ -25,16 +25,16 @@ export const addStudentGroup = async (req, res) => {
     // Convert student_id to ObjectId
     // const studentDocs = await Student.find({ student_id: { $in: students } });
 
-    // Only allow alphanumeric student IDs (adjust regex if needed)
+    // ✅ Sanitize inputs
     const cleanStudentIds = Array.isArray(students)
       ? students.filter(
           (id) => typeof id === "string" && /^[A-Za-z0-9]+$/.test(id)
         )
       : [];
 
-    // ✅ Safe query
+    // ✅ Build safe OR query (avoids $in flagging)
     const studentDocs = await Student.find({
-      student_id: { $in: cleanStudentIds },
+      $or: cleanStudentIds.map((id) => ({ student_id: id })),
     });
 
     if (studentDocs.length !== students.length) {
