@@ -25,14 +25,14 @@ export const addStudentGroup = async (req, res) => {
     // Convert student_id to ObjectId
     // const studentDocs = await Student.find({ student_id: { $in: students } });
 
-    // Ensure `students` is an array of plain strings/numbers only
+    // Only allow alphanumeric student IDs (adjust regex if needed)
     const cleanStudentIds = Array.isArray(students)
       ? students.filter(
-          (id) => typeof id === "string" || typeof id === "number"
+          (id) => typeof id === "string" && /^[A-Za-z0-9]+$/.test(id)
         )
       : [];
 
-    // Use only sanitized IDs in query
+    // ✅ Safe query
     const studentDocs = await Student.find({
       student_id: { $in: cleanStudentIds },
     });
@@ -157,12 +157,10 @@ export const updateStudentGroup = async (req, res) => {
 
     await group.save();
 
-    res
-      .status(200)
-      .json({
-        message: "Student group updated successfully",
-        updatedGroup: group,
-      });
+    res.status(200).json({
+      message: "Student group updated successfully",
+      updatedGroup: group,
+    });
   } catch (error) {
     console.error("Error updating student group:", error);
     res.status(500).json({ message: "Server error", error });
