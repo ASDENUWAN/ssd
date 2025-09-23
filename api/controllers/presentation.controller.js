@@ -9,16 +9,26 @@ import { rescheduleLectures } from "./lecReschedule.controller.js";
 import { sendEmail } from "../utils/emailSender.js";
 
 // Function to check if time slot is available
-const isTimeSlotAvailable = async (date, startTime, endTime, examiners, venue, students) => {
+const isTimeSlotAvailable = async (
+  date,
+  startTime,
+  endTime,
+  examiners,
+  venue,
+  students
+) => {
   // Check for overlapping time slots for examiners
   const overlappingExaminer = await Presentation.findOne({
     date,
     examiners: { $in: examiners },
     $or: [
-      { "timeRange.startTime": { $lt: endTime }, "timeRange.endTime": { $gt: startTime } },
+      {
+        "timeRange.startTime": { $lt: endTime },
+        "timeRange.endTime": { $gt: startTime },
+      },
       { "timeRange.startTime": { $gte: startTime, $lt: endTime } },
-      { "timeRange.endTime": { $gt: startTime, $lte: endTime } }
-    ]
+      { "timeRange.endTime": { $gt: startTime, $lte: endTime } },
+    ],
   });
 
   // Check for overlapping time slots for venue
@@ -26,51 +36,56 @@ const isTimeSlotAvailable = async (date, startTime, endTime, examiners, venue, s
     date,
     venue,
     $or: [
-      { "timeRange.startTime": { $lt: endTime }, "timeRange.endTime": { $gt: startTime } },
+      {
+        "timeRange.startTime": { $lt: endTime },
+        "timeRange.endTime": { $gt: startTime },
+      },
       { "timeRange.startTime": { $gte: startTime, $lt: endTime } },
-      { "timeRange.endTime": { $gt: startTime, $lte: endTime } }
-    ]
+      { "timeRange.endTime": { $gt: startTime, $lte: endTime } },
+    ],
   });
 
-    // Check for overlapping time slots for presenters
+  // Check for overlapping time slots for presenters
   const overlappingStudent = await Presentation.findOne({
     date,
     students: { $in: students },
     $or: [
-      { "timeRange.startTime": { $lt: endTime }, "timeRange.endTime": { $gt: startTime } },
+      {
+        "timeRange.startTime": { $lt: endTime },
+        "timeRange.endTime": { $gt: startTime },
+      },
       { "timeRange.startTime": { $gte: startTime, $lt: endTime } },
-      { "timeRange.endTime": { $gt: startTime, $lte: endTime } }
-    ]
+      { "timeRange.endTime": { $gt: startTime, $lte: endTime } },
+    ],
   });
 
   return !overlappingExaminer && !overlappingVenue && !overlappingStudent;
 };
 
-
 export const addPresentation = async (req, res, next) => {
   try {
-    const { 
-      title, 
-      students, 
-      examiners, 
-      venue, 
-      department, 
-      numOfExaminers, 
-      date, 
-      duration, 
-      timeRange 
+    const {
+      title,
+      students,
+      examiners,
+      venue,
+      department,
+      numOfExaminers,
+      date,
+      duration,
+      timeRange,
     } = req.body;
 
     // Validate required fields
     if (
-      !title || 
-      !students || 
-      !examiners || 
-      !venue || 
-      !department || 
-      !numOfExaminers || 
-      !date || 
-      !duration || 
+      !title ||
+      !students ||
+      !examiners ||
+      !venue ||
+      !department ||
+      !numOfExaminers ||
+      !date ||
+      !duration ||
       !timeRange
     ) {
       return res.status(400).json({ message: "All fields are required" });
@@ -78,15 +93,17 @@ export const addPresentation = async (req, res, next) => {
 
     // 1️⃣ Check if the time slot is available
     const available = await isTimeSlotAvailable(
-      date, 
-      timeRange.startTime, 
-      timeRange.endTime, 
-      examiners, 
-      venue, 
+      date,
+      timeRange.startTime,
+      timeRange.endTime,
+      examiners,
+      venue,
       students
     );
     if (!available) {
-      return res.status(400).json({ message: "Selected time slot is not available" });
+      return res
+        .status(400)
+        .json({ message: "Selected time slot is not available" });
     }
 
     // 2️⃣ Create new presentation
@@ -99,12 +116,10 @@ export const addPresentation = async (req, res, next) => {
       numOfExaminers,
       date,
       duration,
-      timeRange
+      timeRange,
     });
 
     await newPresentation.save();
-
-    
 
     // 3️⃣ Send Email Notifications to All Examiners & Students
     try {
@@ -116,7 +131,7 @@ export const addPresentation = async (req, res, next) => {
       if (!venueDoc) {
         return res.status(404).json({ message: "Venue not found" });
       }
-      
+
       // 3) Now you have the friendly venue_id
       const actualVenueId = venueDoc.venue_id;
       console.log("actualVenueId:", actualVenueId);
@@ -168,51 +183,68 @@ Please be prepared accordingly.
         const examiner = await Examiner.findById(examinerObjectId);
         if (!examiner) continue; // skip if not found
 
-        const fakeReq = { 
-          body: { 
-            lecturerId: examiner.examiner_id, 
-            date 
-          } 
+        const fakeReq = {
+          body: {
+            lecturerId: examiner.examiner_id,
+            date,
+          },
         };
         const fakeRes = {
           status: (code) => ({
             json: (response) => {
-              console.log(`Reschedule response for Examiner ${examiner.examiner_id}:`, response);
+              //console.log(`Reschedule response for Examiner ${examiner.examiner_id}:`, response);
+              console.log("Reschedule response for Examiner", {
+                examinerId: examiner.examiner_id,
+                response,
+              });
             },
           }),
         };
 
         await rescheduleLectures(fakeReq, fakeRes);
       } catch (error) {
-        console.error(`Error while rescheduling lectures for Examiner ${examinerObjectId}:`, error);
+        // console.error(
+        //   `Error while rescheduling lectures for Examiner ${examinerObjectId}:`,
+        //   error
+        // );
+        console.error("Error while rescheduling lectures for Examiner", {
+          examinerId: examinerObjectId,
+          error: error.message,
+          stack: error.stack,
+        });
       }
     }
 
     // 5️⃣ Respond
-    res.status(201).json({ 
-      message: "Presentation scheduled successfully & lectures rescheduled", 
-      newPresentation 
+    res.status(201).json({
+      message: "Presentation scheduled successfully & lectures rescheduled",
+      newPresentation,
     });
-
   } catch (error) {
     console.error("Error in addPresentation:", error);
     next(error);
   }
 };
 
-
 export const checkAvailability = async (req, res, next) => {
   const { date, department, students, examiners, venue, duration } = req.body;
 
   try {
     // Fetch student, examiner, and venue object IDs from the database
-    const studentIds = await Student.find({ student_id: { $in: students } }).select('_id');
-    const examinerIds = await Examiner.find({ examiner_id: { $in: examiners } }).select('_id');
-    const venueObj = await Venue.findOne({ venue_id: venue }).select('_id');
+    const studentIds = await Student.find({
+      student_id: { $in: students },
+    }).select("_id");
+    const examinerIds = await Examiner.find({
+      examiner_id: { $in: examiners },
+    }).select("_id");
+    const venueObj = await Venue.findOne({ venue_id: venue }).select("_id");
 
     // Check if all IDs are valid
     if (!studentIds || !examinerIds || !venueObj) {
-      return res.status(400).json({ success: false, message: 'Invalid student/examiner/venue ID(s)' });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid student/examiner/venue ID(s)",
+      });
     }
 
     // Convert to ObjectId references
@@ -227,15 +259,15 @@ export const checkAvailability = async (req, res, next) => {
       venue: venueObjectId,
       $or: [
         { students: { $in: studentObjectIds } },
-        { examiners: { $in: examinerObjectIds } }
-      ]
+        { examiners: { $in: examinerObjectIds } },
+      ],
     });
 
     // If no presentations exist for the selected day and department, the whole day is free
     if (presentations.length === 0) {
-      return res.status(200).json([
-        { timeSlot: "08:00 - 18:00", available: true },
-      ]);
+      return res
+        .status(200)
+        .json([{ timeSlot: "08:00 - 18:00", available: true }]);
     }
 
     // Convert time range to minutes for easier comparison
@@ -247,7 +279,10 @@ export const checkAvailability = async (req, res, next) => {
     const convertToTime = (minutes) => {
       const hours = Math.floor(minutes / 60);
       const mins = minutes % 60;
-      return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+      return `${String(hours).padStart(2, "0")}:${String(mins).padStart(
+        2,
+        "0"
+      )}`;
     };
 
     // Create an array to store unavailable time slots
@@ -275,7 +310,9 @@ export const checkAvailability = async (req, res, next) => {
         // Check if the time slot is large enough to accommodate the required duration
         if (availableEnd - availableStart >= duration) {
           availableSlots.push({
-            timeSlot: `${convertToTime(availableStart)} - ${convertToTime(availableEnd)}`,
+            timeSlot: `${convertToTime(availableStart)} - ${convertToTime(
+              availableEnd
+            )}`,
             available: true,
           });
         }
@@ -292,7 +329,9 @@ export const checkAvailability = async (req, res, next) => {
       // Check if the time slot is large enough to accommodate the required duration
       if (availableEnd - availableStart >= duration) {
         availableSlots.push({
-          timeSlot: `${convertToTime(availableStart)} - ${convertToTime(availableEnd)}`,
+          timeSlot: `${convertToTime(availableStart)} - ${convertToTime(
+            availableEnd
+          )}`,
           available: true,
         });
       }
@@ -300,7 +339,6 @@ export const checkAvailability = async (req, res, next) => {
 
     // Return the available time slots
     res.status(200).json(availableSlots);
-
   } catch (error) {
     console.error("Error: ", error);
     next(error); // Pass error to the error handling middleware
@@ -310,10 +348,9 @@ export const checkAvailability = async (req, res, next) => {
 export const getAllPresentations = async (req, res, next) => {
   try {
     const presentations = await Presentation.find()
-    .populate("students") 
-    .populate("examiners")
-    .populate("venue");
-
+      .populate("students")
+      .populate("examiners")
+      .populate("venue");
 
     res.status(200).json(presentations);
   } catch (error) {
@@ -329,14 +366,14 @@ export const getPresentationById = async (req, res, next) => {
       .populate("examiners")
       .populate("venue");
 
-    if (!presentation) return res.status(404).json({ message: "Presentation not found" });
+    if (!presentation)
+      return res.status(404).json({ message: "Presentation not found" });
 
     res.status(200).json(presentation);
   } catch (error) {
     next(error);
   }
 };
-
 
 export const updatePresentation = async (req, res) => {
   try {
@@ -349,7 +386,6 @@ export const updatePresentation = async (req, res) => {
       return res.status(404).json({ message: "Presentation not found" });
     }
 
-   
     //  Check if the time slot, venue, and date are changed
     const isTimeChanged =
       existingPresentation.date !== date ||
@@ -368,14 +404,22 @@ export const updatePresentation = async (req, res) => {
         students
       );
       if (!available) {
-        return res.status(400).json({ message: "Selected time slot is not available" });
+        return res
+          .status(400)
+          .json({ message: "Selected time slot is not available" });
       }
     }
 
     //  Update the presentation
-    const updatedPresentation = await Presentation.findByIdAndUpdate(id, req.body, { new: true });
+    const updatedPresentation = await Presentation.findByIdAndUpdate(
+      id,
+      req.body,
+      { new: true }
+    );
     if (!updatedPresentation) {
-      return res.status(404).json({ message: "Presentation not found after update" });
+      return res
+        .status(404)
+        .json({ message: "Presentation not found after update" });
     }
 
     //  Send Email Notifications to All Examiners & Students
@@ -384,17 +428,15 @@ export const updatePresentation = async (req, res) => {
       const examinerDocs = await Examiner.find({ _id: { $in: examiners } });
       const studentDocs = await Student.find({ _id: { $in: students } });
 
-      const { title, department} = updatedPresentation;
+      const { title, department } = updatedPresentation;
       const { startTime, endTime } = updatedPresentation.timeRange;
       const venueDoc = await Venue.findById(existingPresentation.venue);
       if (!venueDoc) {
         return res.status(404).json({ message: "Venue not found" });
       }
-      
+
       // 3) Now you have the friendly venue_id
       const actualVenueId = venueDoc.venue_id;
-      
-            
 
       // Email examiners
       for (const exDoc of examinerDocs) {
@@ -446,14 +488,29 @@ Please take note of these changes.
           const fakeRes = {
             status: (code) => ({
               json: (response) => {
-                console.log(`Reschedule response for Examiner ${examiner.examiner_id}:`, response);
+                // console.log(
+                //   `Reschedule response for Examiner ${examiner.examiner_id}:`,
+                //   response
+                // );
+                console.log("Reschedule response for Examiner", {
+                  examinerId: examiner.examiner_id,
+                  response,
+                });
               },
             }),
           };
 
           await rescheduleLectures(fakeReq, fakeRes);
         } catch (error) {
-          console.error(`Error while rescheduling lectures for Examiner ${examinerObjectId}:`, error);
+          // console.error(
+          //   `Error while rescheduling lectures for Examiner ${examinerObjectId}:`,
+          //   error
+          // );
+          console.error("Error while rescheduling lectures for Examiner", {
+            examinerId: examinerObjectId,
+            error: error.message,
+            stack: error.stack,
+          });
         }
       }
     }
@@ -481,9 +538,6 @@ export const deletePresentation = async (req, res) => {
   }
 };
 
-
-
-
 export const smartSuggestSlot = async (req, res) => {
   try {
     const { studentIds, numExaminers, duration } = req.body;
@@ -498,7 +552,9 @@ export const smartSuggestSlot = async (req, res) => {
     // 2) Get examiners from department
     let departmentExaminers = await Examiner.find({ department });
     if (departmentExaminers.length === 0) {
-      return res.status(400).json({ message: "No examiners found in this department" });
+      return res
+        .status(400)
+        .json({ message: "No examiners found in this department" });
     }
 
     // 3) Get all venues
@@ -550,18 +606,34 @@ export const smartSuggestSlot = async (req, res) => {
 
     existingPresentations.forEach((presentation) => {
       presentation.examiners.forEach((examiner) => {
-        examinerVenueMap.set(examiner.toString(), presentation.venue.toString());
+        examinerVenueMap.set(
+          examiner.toString(),
+          presentation.venue.toString()
+        );
         venueUsed.add(presentation.venue.toString());
       });
     });
 
     // 7) Define possible time slots
     const allTimeSlots = [
-      "08:00", "08:30", "09:00", "09:30",
-      "10:00", "10:30", "11:00", "11:30",
-      "12:00", "12:30", "13:00", "13:30",
-      "14:00", "14:30", "15:00", "15:30",
-      "16:00", "16:30"
+      "08:00",
+      "08:30",
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+      "15:30",
+      "16:00",
+      "16:30",
     ];
 
     // Helper: compute endTime from startTime + duration
@@ -572,8 +644,12 @@ export const smartSuggestSlot = async (req, res) => {
 
       const format = (num) => String(num).padStart(2, "0");
       return {
-        startTime: `${format(startDate.getHours())}:${format(startDate.getMinutes())}`,
-        endTime: `${format(endDate.getHours())}:${format(endDate.getMinutes())}`
+        startTime: `${format(startDate.getHours())}:${format(
+          startDate.getMinutes()
+        )}`,
+        endTime: `${format(endDate.getHours())}:${format(
+          endDate.getMinutes()
+        )}`,
       };
     };
 
@@ -602,8 +678,8 @@ export const smartSuggestSlot = async (req, res) => {
         bestDate,
         adjustedSlot.startTime,
         adjustedSlot.endTime,
-        [],       // Not specifying examiners here => or pass deptExaminers if needed
-        null,     // No specific venue => we do a more general check
+        [], // Not specifying examiners here => or pass deptExaminers if needed
+        null, // No specific venue => we do a more general check
         studentIds
       );
 
@@ -642,7 +718,7 @@ export const smartSuggestSlot = async (req, res) => {
 
       if (!selectedVenue || selectedExaminers.length < numExaminers) {
         return res.status(400).json({
-          message: "No suitable venue and examiners available"
+          message: "No suitable venue and examiners available",
         });
       }
 
@@ -658,16 +734,14 @@ export const smartSuggestSlot = async (req, res) => {
       });
     }
 
-    return res.status(400).json({ message: "No suitable time slots available" });
+    return res
+      .status(400)
+      .json({ message: "No suitable time slots available" });
   } catch (error) {
     console.error("Error in smartSuggestSlot:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
-
-
-
-
 
 export const smartSuggestSlotForReschedule = async (req, res) => {
   try {
@@ -756,11 +830,24 @@ export const smartSuggestSlotForReschedule = async (req, res) => {
 
     // 4) Define time slots from 08:00 - 16:30
     const allTimeSlots = [
-      "08:00", "08:30", "09:00", "09:30",
-      "10:00", "10:30", "11:00", "11:30",
-      "12:00", "12:30", "13:00", "13:30",
-      "14:00", "14:30", "15:00", "15:30",
-      "16:00", "16:30"
+      "08:00",
+      "08:30",
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:00",
+      "12:30",
+      "13:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+      "15:30",
+      "16:00",
+      "16:30",
     ];
 
     // Helper to produce endTime from startTime + duration
@@ -817,8 +904,8 @@ export const smartSuggestSlotForReschedule = async (req, res) => {
         startTime,
         endTime,
         examinerIds, // the examiners
-        null,        // no specific venue
-        studentIds   // the students
+        null, // no specific venue
+        studentIds // the students
       );
       if (!isTimeAvailable) continue;
 
@@ -834,32 +921,35 @@ export const smartSuggestSlotForReschedule = async (req, res) => {
       return res.status(200).json({
         date: bestDate,
         examiners: examinerIds, // array of examiner doc _ids
-        venue: chosenVenue,     // full doc
+        venue: chosenVenue, // full doc
         department,
         timeRange: { startTime, endTime },
       });
     }
 
     // If we exit => no suitable time slots
-    return res.status(400).json({ message: "No suitable time slots available" });
+    return res
+      .status(400)
+      .json({ message: "No suitable time slots available" });
   } catch (error) {
     console.error("smartSuggestSlotForReschedule error:", error);
     return res.status(500).json({ message: "Server error", error });
   }
 };
 
-
-
 export const requestReschedule = async (req, res) => {
   try {
     if (!req.user || !req.user.id || !req.user.role) {
-      return res.status(401).json({ message: "Unauthorized request: User not found." });
+      return res
+        .status(401)
+        .json({ message: "Unauthorized request: User not found." });
     }
 
-    const userId = req.user.id;        // from token
-    const userType = req.user.role;    // e.g. 'examiner'
+    const userId = req.user.id; // from token
+    const userType = req.user.role; // e.g. 'examiner'
 
-    const { presentationId, date, timeRange, venue, reason, requestorEmail } = req.body;
+    const { presentationId, date, timeRange, venue, reason, requestorEmail } =
+      req.body;
 
     // 1) Validate presentation
     const presentation = await Presentation.findById(presentationId);
@@ -869,7 +959,9 @@ export const requestReschedule = async (req, res) => {
 
     // 2) Validate fields
     if (!date || !timeRange || !venue) {
-      return res.status(400).json({ message: "Date, time range, and venue are required." });
+      return res
+        .status(400)
+        .json({ message: "Date, time range, and venue are required." });
     }
 
     // 3) Create a reschedule request
@@ -885,15 +977,15 @@ export const requestReschedule = async (req, res) => {
     await newRequest.save();
     return res.status(201).json({
       message: "Reschedule request submitted successfully",
-      newRequest
+      newRequest,
     });
-
   } catch (error) {
     console.error("Error in requestReschedule:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
+    return res
+      .status(500)
+      .json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const approveOrRejectReschedule = async (req, res) => {
   try {
@@ -911,7 +1003,9 @@ export const approveOrRejectReschedule = async (req, res) => {
     // 2) Grab the presentation from the request
     const presentation = request.presentation;
     if (!presentation) {
-      return res.status(404).json({ message: "Presentation not found in request." });
+      return res
+        .status(404)
+        .json({ message: "Presentation not found in request." });
     }
 
     // 3) The requestor's email was stored in the doc at creation time
@@ -941,7 +1035,9 @@ If you have questions, please contact the admin.
         console.log("No requestor email found, skipping reject email.");
       }
 
-      return res.status(200).json({ message: "Reschedule request rejected successfully" });
+      return res
+        .status(200)
+        .json({ message: "Reschedule request rejected successfully" });
     }
 
     // 5) Approve logic
@@ -967,7 +1063,10 @@ If you have questions, please contact the admin.
       await request.save();
 
       if (requestorEmail) {
-        console.log("Sending auto-reject (time slot unavailable) email to:", requestorEmail);
+        console.log(
+          "Sending auto-reject (time slot unavailable) email to:",
+          requestorEmail
+        );
         const subject = "Reschedule Request Rejected - Time Slot Unavailable";
         const text = `Dear Examiner,
 
@@ -1067,14 +1166,29 @@ Please be prepared accordingly.
       const fakeRes = {
         status: (code) => ({
           json: (response) => {
-            console.log(`Reschedule response for Examiner ${exDoc.examiner_id}:`, response);
+            // console.log(
+            //   `Reschedule response for Examiner ${exDoc.examiner_id}:`,
+            //   response
+            // );
+            console.log("Reschedule response for Examiner", {
+              examinerId: exDoc.examiner_id,
+              response,
+            });
           },
         }),
       };
       try {
         await rescheduleLectures(fakeReq, fakeRes);
       } catch (err) {
-        console.error(`Error while rescheduling for Examiner ${exDoc.examiner_id}:`, err);
+        // console.error(
+        //   `Error while rescheduling for Examiner ${exDoc.examiner_id}:`,
+        //   err
+        // );
+        console.error("Error while rescheduling for Examiner", {
+          examinerId: exDoc.examiner_id,
+          error: err.message,
+          stack: err.stack,
+        });
       }
     }
 
@@ -1086,8 +1200,6 @@ Please be prepared accordingly.
     return res.status(500).json({ message: "Server error", error });
   }
 };
-
-
 
 // controllers/reschedule.controller.js (example)
 export const getAllRequests = async (req, res, next) => {
@@ -1116,7 +1228,6 @@ export const getAllRequests = async (req, res, next) => {
   }
 };
 
-
 export const deleteRescheduleRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -1130,29 +1241,34 @@ export const deleteRescheduleRequest = async (req, res) => {
     // Delete the request
     await RescheduleRequest.findByIdAndDelete(requestId);
 
-    res.status(200).json({ message: "Reschedule request deleted successfully" });
+    res
+      .status(200)
+      .json({ message: "Reschedule request deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
 };
 
-
 export const getPresentationsForExaminer = async (req, res) => {
   try {
     const examinerId = req.user.id; // Use the authenticated user's ID from the JWT token
-    
+
     // Convert examinerId to ObjectId (if needed)
     const examinerObjectId = new mongoose.Types.ObjectId(examinerId);
-    console.log("Fetching presentations for examiner with ObjectId:", examinerObjectId);
+    console.log(
+      "Fetching presentations for examiner with ObjectId:",
+      examinerObjectId
+    );
 
     // Fetch presentations for the examiner based on the examiner ObjectId
     const presentations = await Presentation.find({
-      'examiners': examinerObjectId, // Querying by ObjectId reference
+      examiners: examinerObjectId, // Querying by ObjectId reference
     });
 
-
     if (presentations.length === 0) {
-      return res.status(404).json({ message: "No presentations found for this examiner" });
+      return res
+        .status(404)
+        .json({ message: "No presentations found for this examiner" });
     }
 
     res.json(presentations);
@@ -1162,26 +1278,23 @@ export const getPresentationsForExaminer = async (req, res) => {
   }
 };
 
-
-
-
 // Controller to get presentations for students
 export const getPresentationsForStudent = async (req, res) => {
   try {
     const { studentId } = req.params; // Get the student's ID from params
-    
+
     // Convert studentId to ObjectId (if needed)
     const studentObjectId = new mongoose.Types.ObjectId(studentId);
 
-
     // Fetch presentations for the student based on the student ObjectId
     const presentations = await Presentation.find({
-      'students': studentObjectId, // Querying by ObjectId reference
+      students: studentObjectId, // Querying by ObjectId reference
     });
 
-
     if (presentations.length === 0) {
-      return res.status(404).json({ message: "No presentations found for this student" });
+      return res
+        .status(404)
+        .json({ message: "No presentations found for this student" });
     }
 
     res.json(presentations);
@@ -1206,13 +1319,20 @@ export const getUserPresentations = async (req, res, next) => {
       .populate("venue", "venue_id");
 
     // Filter presentations manually
-    const filteredPresentations = userPresentations.filter(presentation =>
-      presentation.students.some(student => student.student_id === userId) ||
-      presentation.examiners.some(examiner => examiner.examiner_id === userId)
+    const filteredPresentations = userPresentations.filter(
+      (presentation) =>
+        presentation.students.some(
+          (student) => student.student_id === userId
+        ) ||
+        presentation.examiners.some(
+          (examiner) => examiner.examiner_id === userId
+        )
     );
 
     if (filteredPresentations.length === 0) {
-      return res.status(404).json({ message: "No presentations found for this user" });
+      return res
+        .status(404)
+        .json({ message: "No presentations found for this user" });
     }
 
     return res.status(200).json(filteredPresentations);
@@ -1225,26 +1345,28 @@ export const getUserPresentations = async (req, res, next) => {
 export const getRescheduleRequestsForExaminer = async (req, res) => {
   try {
     // 1) The authenticated examiner's ObjectId from JWT
-    const examinerId = req.user.id; 
+    const examinerId = req.user.id;
 
     // 2) Find all requests where `requestedBy.userId` = examinerId
     //    Populate presentation + ONLY the `venue_id` from venue (omitting `_id`)
     const requests = await RescheduleRequest.find({
-      "requestedBy.userId": examinerId
+      "requestedBy.userId": examinerId,
     })
-    .populate({
-      path: "presentation",
-      populate: {
-        path: "venue",
-        model: "Venue",
-        select: "venue_id -_id", // Only return `venue_id`, exclude `_id`
-      }
-    })
-    .sort({ created_at: -1 }); 
+      .populate({
+        path: "presentation",
+        populate: {
+          path: "venue",
+          model: "Venue",
+          select: "venue_id -_id", // Only return `venue_id`, exclude `_id`
+        },
+      })
+      .sort({ created_at: -1 });
 
     // 3) If none found
     if (!requests || requests.length === 0) {
-      return res.status(404).json({ message: "No reschedule requests found for this examiner" });
+      return res
+        .status(404)
+        .json({ message: "No reschedule requests found for this examiner" });
     }
 
     // 4) Return them
@@ -1254,8 +1376,6 @@ export const getRescheduleRequestsForExaminer = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
-
-
 
 export const deleteOldRejectedRequests = async (req, res) => {
   try {
@@ -1286,7 +1406,9 @@ export const deleteAllApprovedRequestsForExaminer = async (req, res) => {
   try {
     // 1) Ensure user is examiner
     if (!req.user || !req.user.id || req.user.role !== "examiner") {
-      return res.status(401).json({ message: "Unauthorized request: Not an examiner or not logged in." });
+      return res.status(401).json({
+        message: "Unauthorized request: Not an examiner or not logged in.",
+      });
     }
 
     const examinerId = req.user.id;
@@ -1314,7 +1436,9 @@ export const deleteAllRejectedRequestsForExaminer = async (req, res) => {
   try {
     // 1) Ensure user is examiner
     if (!req.user || !req.user.id || req.user.role !== "examiner") {
-      return res.status(401).json({ message: "Unauthorized request: Not an examiner or not logged in." });
+      return res.status(401).json({
+        message: "Unauthorized request: Not an examiner or not logged in.",
+      });
     }
 
     const examinerId = req.user.id;
