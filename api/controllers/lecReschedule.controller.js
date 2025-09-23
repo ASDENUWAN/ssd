@@ -62,11 +62,9 @@ export const rescheduleLectures = async (req, res) => {
     });
 
     if (alreadyRescheduled) {
-      return res
-        .status(400)
-        .json({
-          message: "Lectures for this day have already been rescheduled.",
-        });
+      return res.status(400).json({
+        message: "Lectures for this day have already been rescheduled.",
+      });
     }
 
     // **Find Free Slots - Checking ALL timetables**
@@ -208,17 +206,19 @@ export const rescheduleLectures = async (req, res) => {
         try {
           await sendEmail(email, emailSubject, emailText);
         } catch (error) {
-          console.error(` Failed to send email to ${email}:`, error);
+          console.error("Failed to send email", {
+            email: email,
+            error: error.message,
+            stack: error.stack,
+          });
         }
       }
     }
 
-    return res
-      .status(200)
-      .json({
-        message: "Lectures rescheduled & notifications sent.",
-        rescheduled,
-      });
+    return res.status(200).json({
+      message: "Lectures rescheduled & notifications sent.",
+      rescheduled,
+    });
   } catch (error) {
     console.error("Error in rescheduling lectures:", error);
     return res.status(500).json({ message: "Server error", error });
