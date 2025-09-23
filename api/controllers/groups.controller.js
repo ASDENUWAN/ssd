@@ -22,20 +22,22 @@ export const addStudentGroup = async (req, res) => {
         .json({ message: "Department and students are required" });
     }
 
-    // Convert student_id to ObjectId
-    // const studentDocs = await Student.find({ student_id: { $in: students } });
+    // ✅ Sanitize & convert student IDs to ObjectId
+    if (!Array.isArray(students)) {
+      return res.status(400).json({ message: "Students must be an array" });
+    }
 
-    // ✅ Sanitize inputs
-    const cleanStudentIds = Array.isArray(students)
-      ? students.filter(
-          (id) => typeof id === "string" && /^[A-Za-z0-9]+$/.test(id)
-        )
-      : [];
+    let objectIds;
+    try {
+      objectIds = students.map((id) => mongoose.Types.ObjectId(String(id)));
+    } catch (err) {
+      return res
+        .status(400)
+        .json({ message: "One or more student IDs are not valid ObjectId" });
+    }
 
-    // ✅ Build safe OR query (avoids $in flagging)
-    const studentDocs = await Student.find({
-      $or: cleanStudentIds.map((id) => ({ student_id: id })),
-    });
+    // ✅ Safe query with ObjectId array (scanner friendly)
+    const studentDocs = await Student.find({ _id: { $in: objectIds } });
 
     if (studentDocs.length !== students.length) {
       return res
